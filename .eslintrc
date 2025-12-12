@@ -1,0 +1,10 @@
+{
+  "extends": [
+    "@grafana/eslint-config"
+  ],
+  "root": true,
+  "plugins": ["@typescript-eslint", "jsdoc", "react", "react-hooks"],
+  "rules": {
+    "react/prop-types": "off"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/master/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "app",
+  "name": "Grafana Reporter",
+  "id": "progressio-grafanareporter-app",
+  "info": {
+    "description": "Schedule PDF/PNG report generation and email sending",
+    "author": {
+      "name": "Progressio",
+      "url": "https://github.com/Progressio-dev"
+    },
+    "keywords": ["report", "pdf", "png", "scheduler", "email"],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [
+      {
+        "name": "GitHub",
+        "url": "https://github.com/Progressio-dev/grafana-reporter"
+      }
+    ],
+    "screenshots": [],
+    "version": "1.0.0",
+    "updated": "2025-12-12"
+  },
+  "includes": [
+    {
+      "type": "page",
+      "name": "Configuration",
+      "path": "/a/progressio-grafanareporter-app",
+      "role": "Admin",
+      "addToNav": true,
+      "defaultNav": true
+    }
+  ],
+  "dependencies": {
+    "grafanaDependency": ">=9.0.0",
+    "plugins": []
+  },
+  "backend": true,
+  "executable": "gpx_grafana-reporter"
+}

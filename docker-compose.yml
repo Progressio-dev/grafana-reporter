@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=progressio-grafanareporter-app
+      - GF_LOG_LEVEL=debug
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_FROM=grafana@localhost
+      - GRAFANA_URL=http://localhost:3000
+    volumes:
+      - ./dist:/var/lib/grafana/plugins/progressio-grafanareporter-app
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - renderer
+      - mailhog
+
+  renderer:
+    image: grafana/grafana-image-renderer:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - ENABLE_METRICS=true
+      - HTTP_PORT=8081
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP port
+      - "8025:8025"  # Web UI
+
+volumes:
+  grafana-data:
