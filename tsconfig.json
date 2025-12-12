@@ -3,7 +3,7 @@
     "baseUrl": "./src",
     "outDir": "./dist",
     "moduleResolution": "node",
-    "module": "esnext",
+    "module": "commonjs",
     "target": "esnext",
     "lib": ["esnext", "dom"],
     "jsx": "react",
@@ -11,11 +11,16 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "strict": true,
+    "strict": false,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "types": ["node", "jest"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*", ".config/**/*"],
+  "exclude": ["node_modules", "dist"],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  }
 }

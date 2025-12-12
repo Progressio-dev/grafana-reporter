@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Schedule PDF/PNG report generation and email sending",
   "scripts": {
-    "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
-    "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",
+    "build": "webpack -c ./webpack.config.js --env production",
+    "dev": "webpack -w -c ./webpack.config.js --env development",
     "test": "jest --watch --onlyChanged",
     "test:ci": "jest --passWithNoTests --maxWorkers 4",
     "typecheck": "tsc --noEmit",
@@ -56,6 +56,7 @@
     "webpack-merge": "^5.9.0"
   },
   "dependencies": {
+    "ajv": "^8.17.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tslib": "^2.5.0"
