@@ -543,7 +543,7 @@ func (app *App) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 		Recipients: req.Recipients,
 		Subject:    req.Subject,
 		Body:       req.Body,
-		Format:     "txt",
+		Format:     "test", // Using "test" format to distinguish from actual report formats
 	}
 	
 	if err := app.sendEmail(testJob, testMessage); err != nil {

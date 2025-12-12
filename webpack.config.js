@@ -36,7 +36,13 @@ module.exports = (env) => ({
         { from: 'LICENSE', to: '.', noErrorOnMissing: true },
       ],
     }),
-    // Temporarily disabled - has type checking issues with Grafana UI components
+    // ForkTsCheckerWebpackPlugin is temporarily disabled due to type incompatibilities
+    // between React 18 and Grafana UI 9.x components. Specifically, the Grafana UI
+    // Input and TextArea components are missing the onPointerEnterCapture and
+    // onPointerLeaveCapture properties required by React 18's type definitions.
+    // This can be re-enabled once Grafana UI is updated to be fully compatible with
+    // React 18 types, or when we upgrade to a newer version of Grafana that resolves
+    // these type issues.
     // new ForkTsCheckerWebpackPlugin({
     //   async: Boolean(env.development),
     //   typescript: {

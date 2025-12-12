@@ -60,7 +60,8 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
   };
 
   const handleDeleteJob = async (jobId: string) => {
-    if (!confirm('Are you sure you want to delete this job?')) {
+    // TODO: Replace with Grafana UI confirmation dialog component
+    if (!window.confirm('Are you sure you want to delete this job?')) {
       return;
     }
 
@@ -69,17 +70,20 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
       await loadJobs();
     } catch (err) {
       console.error('Failed to delete job:', err);
-      alert('Failed to delete job');
+      // TODO: Replace with Grafana UI notification system
+      window.alert('Failed to delete job');
     }
   };
 
   const handleExecuteJob = async (jobId: string) => {
     try {
       await getBackendSrv().post(`/api/plugins/${pluginId}/resources/jobs/${jobId}/execute`);
-      alert('Job execution started');
+      // TODO: Replace with Grafana UI notification system
+      window.alert('Job execution started');
     } catch (err) {
       console.error('Failed to execute job:', err);
-      alert('Failed to execute job');
+      // TODO: Replace with Grafana UI notification system
+      window.alert('Failed to execute job');
     }
   };
 
