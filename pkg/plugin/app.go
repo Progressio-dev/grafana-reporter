@@ -37,16 +37,32 @@ type Job struct {
 	Body         string   `json:"body"`
 }
 
+// Config represents the plugin configuration
+type Config struct {
+	GrafanaURL    string `json:"grafanaUrl"`
+	GrafanaAPIKey string `json:"grafanaApiKey"`
+	SMTPHost      string `json:"smtpHost"`
+	SMTPPort      int    `json:"smtpPort"`
+	SMTPUser      string `json:"smtpUser"`
+	SMTPPassword  string `json:"smtpPassword"`
+	SMTPFrom      string `json:"smtpFrom"`
+}
+
 // App implements the backend plugin
 type App struct {
 	backend.CallResourceHandler
 	
-	scheduler *cron.Cron
-	jobs      map[string]Job
-	cronIDs   map[string]cron.EntryID
-	jobsFile  string
-	mu        sync.RWMutex
+	scheduler  *cron.Cron
+	jobs       map[string]Job
+	cronIDs    map[string]cron.EntryID
+	jobsFile   string
+	mu         sync.RWMutex
 	
+	config     Config
+	configFile string
+	configMu   sync.RWMutex
+	
+	// Legacy fields for backward compatibility
 	grafanaURL string
 	apiKey     string
 }
@@ -56,13 +72,19 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 	log.DefaultLogger.Info("Creating new app instance")
 	
 	app := &App{
-		scheduler: cron.New(),
-		jobs:      make(map[string]Job),
-		cronIDs:   make(map[string]cron.EntryID),
-		jobsFile:  "/var/lib/grafana/plugin-data/progressio-grafanareporter-app/jobs.json",
+		scheduler:  cron.New(),
+		jobs:       make(map[string]Job),
+		cronIDs:    make(map[string]cron.EntryID),
+		jobsFile:   "/var/lib/grafana/plugin-data/progressio-grafanareporter-app/jobs.json",
+		configFile: "/var/lib/grafana/plugin-data/progressio-grafanareporter-app/config.json",
 	}
 	
-	// Parse settings
+	// Load configuration from file
+	if err := app.loadConfig(); err != nil {
+		log.DefaultLogger.Warn("Failed to load config", "error", err)
+	}
+	
+	// Parse settings (legacy support)
 	if settings.JSONData != nil {
 		var jsonData map[string]interface{}
 		if err := json.Unmarshal(settings.JSONData, &jsonData); err == nil {
@@ -72,18 +94,50 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 		}
 	}
 	
-	// Get API key from secure JSON data
+	// Get API key from secure JSON data (legacy support)
 	if settings.DecryptedSecureJSONData != nil {
 		if key, ok := settings.DecryptedSecureJSONData["apiKey"]; ok {
 			app.apiKey = key
 		}
 	}
 	
-	// Set default Grafana URL if not configured
-	if app.grafanaURL == "" {
-		app.grafanaURL = os.Getenv("GRAFANA_URL")
-		if app.grafanaURL == "" {
-			app.grafanaURL = "http://localhost:3000"
+	// Use config values if set, otherwise use legacy values or defaults
+	if app.config.GrafanaURL == "" {
+		if app.grafanaURL != "" {
+			app.config.GrafanaURL = app.grafanaURL
+		} else {
+			app.config.GrafanaURL = os.Getenv("GRAFANA_URL")
+			if app.config.GrafanaURL == "" {
+				app.config.GrafanaURL = "http://localhost:3000"
+			}
+		}
+	}
+	
+	if app.config.GrafanaAPIKey == "" && app.apiKey != "" {
+		app.config.GrafanaAPIKey = app.apiKey
+	}
+	
+	// Set SMTP defaults from environment if not in config
+	if app.config.SMTPHost == "" {
+		app.config.SMTPHost = os.Getenv("SMTP_HOST")
+	}
+	if app.config.SMTPPort == 0 {
+		if port := os.Getenv("SMTP_PORT"); port != "" {
+			fmt.Sscanf(port, "%d", &app.config.SMTPPort)
+		} else {
+			app.config.SMTPPort = 587
+		}
+	}
+	if app.config.SMTPUser == "" {
+		app.config.SMTPUser = os.Getenv("SMTP_USER")
+	}
+	if app.config.SMTPPassword == "" {
+		app.config.SMTPPassword = os.Getenv("SMTP_PASS")
+	}
+	if app.config.SMTPFrom == "" {
+		app.config.SMTPFrom = os.Getenv("SMTP_FROM")
+		if app.config.SMTPFrom == "" {
+			app.config.SMTPFrom = app.config.SMTPUser
 		}
 	}
 	
@@ -106,6 +160,7 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 	mux := http.NewServeMux()
 	mux.HandleFunc("/jobs", app.handleJobs)
 	mux.HandleFunc("/jobs/", app.handleJobByID)
+	mux.HandleFunc("/config", app.handleConfig)
 	mux.HandleFunc("/test-email", app.handleTestEmail)
 	app.CallResourceHandler = httpadapter.New(mux)
 	
@@ -179,6 +234,55 @@ func (app *App) saveJobs() error {
 	return nil
 }
 
+// loadConfig loads configuration from the JSON file
+func (app *App) loadConfig() error {
+	app.configMu.Lock()
+	defer app.configMu.Unlock()
+	
+	// Create data directory if it doesn't exist
+	dir := filepath.Dir(app.configFile)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	
+	// Check if file exists
+	if _, err := os.Stat(app.configFile); os.IsNotExist(err) {
+		// No config file yet, use defaults
+		return nil
+	}
+	
+	data, err := os.ReadFile(app.configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+	
+	if err := json.Unmarshal(data, &app.config); err != nil {
+		return fmt.Errorf("failed to parse config file: %w", err)
+	}
+	
+	log.DefaultLogger.Info("Loaded configuration from file")
+	return nil
+}
+
+// saveConfig saves configuration to the JSON file
+func (app *App) saveConfig() error {
+	app.configMu.RLock()
+	config := app.config
+	app.configMu.RUnlock()
+	
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	
+	if err := os.WriteFile(app.configFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	
+	log.DefaultLogger.Info("Configuration saved to file")
+	return nil
+}
+
 // scheduleJob schedules a job with the cron scheduler
 func (app *App) scheduleJob(job Job) error {
 	app.mu.Lock()
@@ -240,16 +344,22 @@ func (app *App) executeJob(job Job) error {
 
 // renderReport renders a dashboard or panel to PNG/PDF
 func (app *App) renderReport(job Job) ([]byte, error) {
+	// Get Grafana URL from config
+	app.configMu.RLock()
+	grafanaURL := app.config.GrafanaURL
+	apiKey := app.config.GrafanaAPIKey
+	app.configMu.RUnlock()
+	
 	// Build render URL
 	var renderURL string
 	if job.PanelID != nil {
 		// Render single panel
 		renderURL = fmt.Sprintf("%s/render/d-solo/%s/%s?panelId=%d&from=%s&to=%s&width=%d&height=%d&scale=%d&tz=UTC",
-			app.grafanaURL, job.DashboardUID, job.Slug, *job.PanelID, job.From, job.To, job.Width, job.Height, job.Scale)
+			grafanaURL, job.DashboardUID, job.Slug, *job.PanelID, job.From, job.To, job.Width, job.Height, job.Scale)
 	} else {
 		// Render full dashboard
 		renderURL = fmt.Sprintf("%s/render/d/%s/%s?from=%s&to=%s&width=%d&height=%d&scale=%d&kiosk&tz=UTC",
-			app.grafanaURL, job.DashboardUID, job.Slug, job.From, job.To, job.Width, job.Height, job.Scale)
+			grafanaURL, job.DashboardUID, job.Slug, job.From, job.To, job.Width, job.Height, job.Scale)
 	}
 	
 	log.DefaultLogger.Debug("Rendering report", "url", renderURL, "format", job.Format)
@@ -261,8 +371,8 @@ func (app *App) renderReport(job Job) ([]byte, error) {
 	}
 	
 	// Add authorization header
-	if app.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+app.apiKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 	
 	// Execute request
@@ -293,12 +403,14 @@ func (app *App) renderReport(job Job) ([]byte, error) {
 func (app *App) sendEmail(job Job, attachment []byte) error {
 	log.DefaultLogger.Info("Sending email", "recipients", job.Recipients, "subject", job.Subject)
 	
-	// Get SMTP configuration from environment
-	smtpHost := os.Getenv("SMTP_HOST")
-	smtpPort := os.Getenv("SMTP_PORT")
-	smtpUser := os.Getenv("SMTP_USER")
-	smtpPass := os.Getenv("SMTP_PASS")
-	smtpFrom := os.Getenv("SMTP_FROM")
+	// Get SMTP configuration from config
+	app.configMu.RLock()
+	smtpHost := app.config.SMTPHost
+	smtpPort := fmt.Sprintf("%d", app.config.SMTPPort)
+	smtpUser := app.config.SMTPUser
+	smtpPass := app.config.SMTPPassword
+	smtpFrom := app.config.SMTPFrom
+	app.configMu.RUnlock()
 	
 	if smtpHost == "" {
 		return fmt.Errorf("SMTP_HOST not configured")
@@ -308,7 +420,7 @@ func (app *App) sendEmail(job Job, attachment []byte) error {
 		smtpFrom = smtpUser
 	}
 	
-	if smtpPort == "" {
+	if smtpPort == "" || smtpPort == "0" {
 		smtpPort = "587"
 	}
 	
@@ -559,6 +671,92 @@ func (app *App) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Test email sent successfully",
 	})
+}
+
+func (app *App) handleConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		app.getConfig(w, r)
+	case http.MethodPost:
+		app.updateConfig(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (app *App) getConfig(w http.ResponseWriter, r *http.Request) {
+	app.configMu.RLock()
+	config := app.config
+	app.configMu.RUnlock()
+	
+	// Create a response config with masked sensitive data
+	type ConfigResponse struct {
+		GrafanaURL    string `json:"grafanaUrl"`
+		GrafanaAPIKey string `json:"grafanaApiKey"`
+		SMTPHost      string `json:"smtpHost"`
+		SMTPPort      int    `json:"smtpPort"`
+		SMTPUser      string `json:"smtpUser"`
+		SMTPPassword  string `json:"smtpPassword"`
+		SMTPFrom      string `json:"smtpFrom"`
+	}
+	
+	response := ConfigResponse{
+		GrafanaURL:    config.GrafanaURL,
+		GrafanaAPIKey: maskString(config.GrafanaAPIKey),
+		SMTPHost:      config.SMTPHost,
+		SMTPPort:      config.SMTPPort,
+		SMTPUser:      config.SMTPUser,
+		SMTPPassword:  maskString(config.SMTPPassword),
+		SMTPFrom:      config.SMTPFrom,
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func (app *App) updateConfig(w http.ResponseWriter, r *http.Request) {
+	var newConfig Config
+	if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	
+	// Get current config to preserve masked values
+	app.configMu.Lock()
+	
+	// If API key or password are masked (contain asterisks), keep the old value
+	if strings.Contains(newConfig.GrafanaAPIKey, "*") {
+		newConfig.GrafanaAPIKey = app.config.GrafanaAPIKey
+	}
+	if strings.Contains(newConfig.SMTPPassword, "*") {
+		newConfig.SMTPPassword = app.config.SMTPPassword
+	}
+	
+	app.config = newConfig
+	app.configMu.Unlock()
+	
+	// Save to file
+	if err := app.saveConfig(); err != nil {
+		log.DefaultLogger.Error("Failed to save config", "error", err)
+		http.Error(w, fmt.Sprintf("Failed to save configuration: %v", err), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Configuration saved successfully",
+	})
+}
+
+// maskString masks a string by replacing all but the first and last characters with asterisks
+func maskString(s string) string {
+	if s == "" {
+		return ""
+	}
+	if len(s) <= 4 {
+		return "****"
+	}
+	return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
 }
 
 // CheckHealth handles health check requests
