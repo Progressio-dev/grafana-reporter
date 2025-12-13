@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,7 +59,7 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 		scheduler: cron.New(),
 		jobs:      make(map[string]Job),
 		cronIDs:   make(map[string]cron.EntryID),
-		jobsFile:  "data/jobs.json",
+		jobsFile:  "/var/lib/grafana/plugin-data/progressio-grafanareporter-app/jobs.json",
 	}
 	
 	// Parse settings
@@ -335,9 +336,19 @@ func (app *App) handleJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleJobByID(w http.ResponseWriter, r *http.Request) {
-	// Extract job ID from path
-	jobID := r.URL.Path[len("/jobs/"):]
+	// Extract path after /jobs/
+	path := r.URL.Path[len("/jobs/"):]
 	
+	// Check if it's an execute request
+	if r.Method == http.MethodPost && strings.HasSuffix(path, "/execute") {
+		jobID := strings.TrimSuffix(path, "/execute")
+		app.executeJobHandler(w, r, jobID)
+		return
+	}
+	
+	// Otherwise, path is the job ID
+	jobID := path
+
 	switch r.Method {
 	case http.MethodGet:
 		app.getJob(w, r, jobID)
@@ -345,13 +356,6 @@ func (app *App) handleJobByID(w http.ResponseWriter, r *http.Request) {
 		app.updateJob(w, r, jobID)
 	case http.MethodDelete:
 		app.deleteJob(w, r, jobID)
-	case http.MethodPost:
-		// Support /jobs/{id}/execute endpoint
-		if r.URL.Path == fmt.Sprintf("/jobs/%s/execute", jobID) {
-			app.executeJobHandler(w, r, jobID)
-		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
-		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
