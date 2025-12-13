@@ -123,7 +123,10 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 	}
 	if app.config.SMTPPort == 0 {
 		if port := os.Getenv("SMTP_PORT"); port != "" {
-			fmt.Sscanf(port, "%d", &app.config.SMTPPort)
+			if _, err := fmt.Sscanf(port, "%d", &app.config.SMTPPort); err != nil {
+				log.DefaultLogger.Warn("Invalid SMTP_PORT environment variable, using default 587", "error", err)
+				app.config.SMTPPort = 587
+			}
 		} else {
 			app.config.SMTPPort = 587
 		}

@@ -77,15 +77,16 @@ export const Settings: React.FC<SettingsProps> = ({ pluginId, onBack }) => {
   };
 
   const handleTestSMTP = async () => {
+    // Validate before setting loading state
+    if (!config.smtpFrom) {
+      setError('Please configure "From Email" before testing');
+      return;
+    }
+
     try {
       setTesting(true);
       setError(null);
       setSuccess(null);
-
-      if (!config.smtpFrom) {
-        setError('Please configure "From Email" before testing');
-        return;
-      }
 
       await getBackendSrv().post(`/api/plugins/${pluginId}/resources/test-email`, {
         recipients: [config.smtpFrom],
@@ -169,8 +170,17 @@ export const Settings: React.FC<SettingsProps> = ({ pluginId, onBack }) => {
               <Input
                 type="number"
                 value={config.smtpPort}
-                onChange={(e) => setConfig({ ...config, smtpPort: parseInt(e.currentTarget.value) || 587 })}
+                onChange={(e) => {
+                  const port = parseInt(e.currentTarget.value, 10);
+                  if (isNaN(port) || port < 1 || port > 65535) {
+                    setConfig({ ...config, smtpPort: 587 });
+                  } else {
+                    setConfig({ ...config, smtpPort: port });
+                  }
+                }}
                 placeholder="587"
+                min="1"
+                max="65535"
               />
             </Field>
             <Field label="SMTP Username" description="Username for SMTP authentication">
