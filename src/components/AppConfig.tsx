@@ -4,6 +4,7 @@ import { Button, Field, Input, VerticalGroup, HorizontalGroup, Alert, Spinner } 
 import { getBackendSrv } from '@grafana/runtime';
 import { JobList } from './JobList';
 import { JobForm } from './JobForm';
+import { Settings } from './Settings';
 
 interface Job {
   id: string;
@@ -27,6 +28,7 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
 
   const pluginId = meta.id;
@@ -110,12 +112,24 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
     setEditingJob(null);
   };
 
+  const handleShowSettings = () => {
+    setShowSettings(true);
+  };
+
+  const handleBackFromSettings = () => {
+    setShowSettings(false);
+  };
+
   if (loading) {
     return (
       <div style={{ padding: '20px' }}>
         <Spinner />
       </div>
     );
+  }
+
+  if (showSettings) {
+    return <Settings pluginId={pluginId} onBack={handleBackFromSettings} />;
   }
 
   if (showForm) {
@@ -147,6 +161,9 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
         <HorizontalGroup>
           <Button icon="plus" onClick={handleCreateJob}>
             Create Job
+          </Button>
+          <Button icon="cog" variant="secondary" onClick={handleShowSettings}>
+            Settings
           </Button>
           <Button icon="sync" variant="secondary" onClick={loadJobs}>
             Refresh
