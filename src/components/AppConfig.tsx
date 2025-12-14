@@ -21,6 +21,7 @@ interface Job {
   recipients: string[];
   subject: string;
   body: string;
+  variables?: { [key: string]: string };
 }
 
 export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
@@ -139,6 +140,7 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
           job={editingJob}
           onSave={handleSaveJob}
           onCancel={handleCancelForm}
+          pluginId={pluginId}
         />
       </div>
     );

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,20 +22,21 @@ import (
 
 // Job represents a scheduled report job
 type Job struct {
-	ID           string   `json:"id"`
-	Cron         string   `json:"cron"`
-	DashboardUID string   `json:"dashboardUid"`
-	Slug         string   `json:"slug"`
-	PanelID      *int     `json:"panelId,omitempty"`
-	From         string   `json:"from"`
-	To           string   `json:"to"`
-	Width        int      `json:"width"`
-	Height       int      `json:"height"`
-	Scale        int      `json:"scale"`
-	Format       string   `json:"format"` // png or pdf
-	Recipients   []string `json:"recipients"`
-	Subject      string   `json:"subject"`
-	Body         string   `json:"body"`
+	ID           string            `json:"id"`
+	Cron         string            `json:"cron"`
+	DashboardUID string            `json:"dashboardUid"`
+	Slug         string            `json:"slug"`
+	PanelID      *int              `json:"panelId,omitempty"`
+	From         string            `json:"from"`
+	To           string            `json:"to"`
+	Width        int               `json:"width"`
+	Height       int               `json:"height"`
+	Scale        int               `json:"scale"`
+	Format       string            `json:"format"` // png or pdf
+	Recipients   []string          `json:"recipients"`
+	Subject      string            `json:"subject"`
+	Body         string            `json:"body"`
+	Variables    map[string]string `json:"variables,omitempty"` // Dashboard variables
 }
 
 // Config represents the plugin configuration
@@ -165,6 +167,7 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 	mux.HandleFunc("/jobs/", app.handleJobByID)
 	mux.HandleFunc("/config", app.handleConfig)
 	mux.HandleFunc("/test-email", app.handleTestEmail)
+	mux.HandleFunc("/dashboards", app.handleDashboards)
 	app.CallResourceHandler = httpadapter.New(mux)
 	
 	return app, nil
@@ -363,6 +366,13 @@ func (app *App) renderReport(job Job) ([]byte, error) {
 		// Render full dashboard
 		renderURL = fmt.Sprintf("%s/render/d/%s/%s?from=%s&to=%s&width=%d&height=%d&scale=%d&kiosk&tz=UTC",
 			grafanaURL, job.DashboardUID, job.Slug, job.From, job.To, job.Width, job.Height, job.Scale)
+	}
+	
+	// Add variables to the URL if present
+	if len(job.Variables) > 0 {
+		for key, value := range job.Variables {
+			renderURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+		}
 	}
 	
 	log.DefaultLogger.Debug("Rendering report", "url", renderURL, "format", job.Format)
@@ -779,4 +789,65 @@ func (app *App) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest
 		Status:  status,
 		Message: message,
 	}, nil
+}
+
+// handleDashboards fetches dashboards from Grafana API
+func (app *App) handleDashboards(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get Grafana URL and API key from config
+	app.configMu.RLock()
+	grafanaURL := app.config.GrafanaURL
+	apiKey := app.config.GrafanaAPIKey
+	app.configMu.RUnlock()
+
+	if grafanaURL == "" {
+		http.Error(w, "Grafana URL not configured", http.StatusInternalServerError)
+		return
+	}
+
+	if apiKey == "" {
+		http.Error(w, "Grafana API key not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Make request to Grafana search API
+	searchURL := fmt.Sprintf("%s/api/search?type=dash-db", grafanaURL)
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create request: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch dashboards: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		http.Error(w, fmt.Sprintf("Grafana API returned status %d: %s", resp.StatusCode, string(body)), http.StatusInternalServerError)
+		return
+	}
+
+	// Read and forward the response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read response: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(body)
 }

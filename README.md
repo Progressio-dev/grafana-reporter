@@ -9,6 +9,8 @@ Schedule PDF/PNG report generation and email sending using Grafana OSS and grafa
 - 📧 **Email Delivery**: Automatically send rendered reports via email
 - 🖼️ **Multiple Formats**: Support for PNG and PDF output
 - 🔒 **Secure**: Uses Grafana's authorization system
+- 🎯 **Dashboard Selector**: Select dashboards from dropdown with folder hierarchy (no need to manually enter UID/slug)
+- 🔧 **Variable Support**: Set dashboard variables for each report (key=value format)
 
 ## Requirements
 
@@ -73,9 +75,10 @@ npm run dev
 2. Click "Create Job" to add a new scheduled report
 3. Configure:
    - Cron expression (e.g., `0 9 * * *` for daily at 9 AM)
-   - Dashboard UID and slug
+   - Dashboard: Select from dropdown (shows all dashboards organized by folder)
    - Optional: Panel ID for single panel rendering
    - Time range (from/to)
+   - Optional: Variables (key=value format, one per line)
    - Rendering dimensions (width, height, scale)
    - Output format (PNG or PDF)
    - Email recipients
@@ -100,7 +103,11 @@ npm run dev
   "format": "png",
   "recipients": ["user@example.com"],
   "subject": "Daily Report",
-  "body": "Please find attached your daily report."
+  "body": "Please find attached your daily report.",
+  "variables": {
+    "region": "us-east",
+    "environment": "production"
+  }
 }
 ```
 
@@ -114,6 +121,7 @@ The plugin provides the following backend API endpoints:
 - `PUT /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}` - Update job
 - `DELETE /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}` - Delete job
 - `POST /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}/execute` - Execute job immediately
+- `GET /api/plugins/progressio-grafanareporter-app/resources/dashboards` - List all dashboards from Grafana
 
 ## Architecture
 

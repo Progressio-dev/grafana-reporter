@@ -10,6 +10,7 @@ import {
   Alert,
 } from '@grafana/ui';
 import { SelectableValue } from '@grafana/data';
+import { DashboardSelector } from './DashboardSelector';
 
 interface Job {
   id: string;
@@ -26,12 +27,14 @@ interface Job {
   recipients: string[];
   subject: string;
   body: string;
+  variables?: { [key: string]: string };
 }
 
 interface JobFormProps {
   job: Job | null;
   onSave: (job: Job) => Promise<void>;
   onCancel: () => void;
+  pluginId: string;
 }
 
 const formatOptions: Array<SelectableValue<string>> = [
@@ -39,7 +42,7 @@ const formatOptions: Array<SelectableValue<string>> = [
   { label: 'PDF', value: 'pdf' },
 ];
 
-export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
+export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel, pluginId }) => {
   const [formData, setFormData] = useState<Job>({
     id: '',
     cron: '0 9 * * *',
@@ -55,9 +58,11 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
     recipients: [],
     subject: 'Grafana Report',
     body: 'Please find attached your scheduled Grafana report.',
+    variables: {},
   });
 
   const [recipientsText, setRecipientsText] = useState('');
+  const [variablesText, setVariablesText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -65,6 +70,14 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
     if (job) {
       setFormData(job);
       setRecipientsText(job.recipients.join(', '));
+      
+      // Convert variables object to text
+      if (job.variables) {
+        const varsText = Object.entries(job.variables)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n');
+        setVariablesText(varsText);
+      }
     }
   }, [job]);
 
@@ -78,7 +91,7 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
       return;
     }
     if (!formData.dashboardUid) {
-      setError('Dashboard UID is required');
+      setError('Dashboard is required');
       return;
     }
     if (!formData.slug) {
@@ -101,11 +114,30 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
       return;
     }
 
+    // Parse variables
+    const variables: { [key: string]: string } = {};
+    if (variablesText.trim()) {
+      const lines = variablesText.split('\n');
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine) {
+          const [key, ...valueParts] = trimmedLine.split('=');
+          if (key && valueParts.length > 0) {
+            variables[key.trim()] = valueParts.join('=').trim();
+          } else {
+            setError(`Invalid variable format: "${trimmedLine}". Use format: key=value`);
+            return;
+          }
+        }
+      }
+    }
+
     try {
       setSaving(true);
       await onSave({
         ...formData,
         recipients,
+        variables: Object.keys(variables).length > 0 ? variables : undefined,
       });
     } catch (err) {
       setError('Failed to save job: ' + (err as Error).message);
@@ -134,23 +166,25 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
           />
         </Field>
 
-        <Field label="Dashboard UID" description="The UID of the dashboard to render">
-          <Input
-            value={formData.dashboardUid}
-            onChange={(e) => setFormData({ ...formData, dashboardUid: e.currentTarget.value })}
-            placeholder="abc123xyz"
-            required
-          />
-        </Field>
-
-        <Field label="Dashboard Slug" description="The URL slug of the dashboard">
-          <Input
-            value={formData.slug}
-            onChange={(e) => setFormData({ ...formData, slug: e.currentTarget.value })}
-            placeholder="my-dashboard"
-            required
-          />
-        </Field>
+        <DashboardSelector
+          pluginId={pluginId}
+          value={formData.dashboardUid && formData.slug ? { uid: formData.dashboardUid, slug: formData.slug } : null}
+          onChange={(dashboard) => {
+            if (dashboard) {
+              setFormData({ 
+                ...formData, 
+                dashboardUid: dashboard.uid, 
+                slug: dashboard.slug 
+              });
+            } else {
+              setFormData({ 
+                ...formData, 
+                dashboardUid: '', 
+                slug: '' 
+              });
+            }
+          }}
+        />
 
         <Field label="Panel ID (optional)" description="Leave empty to render the full dashboard">
           <Input
@@ -185,6 +219,18 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
             />
           </Field>
         </HorizontalGroup>
+
+        <Field 
+          label="Variables (optional)" 
+          description="Dashboard variables, one per line in format: key=value"
+        >
+          <TextArea
+            value={variablesText}
+            onChange={(e) => setVariablesText(e.currentTarget.value)}
+            rows={3}
+            placeholder={'region=us-east\nenvironment=production'}
+          />
+        </Field>
 
         <HorizontalGroup>
           <Field label="Width">

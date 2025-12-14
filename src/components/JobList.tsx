@@ -16,6 +16,7 @@ interface Job {
   recipients: string[];
   subject: string;
   body: string;
+  variables?: { [key: string]: string };
 }
 
 interface JobListProps {
