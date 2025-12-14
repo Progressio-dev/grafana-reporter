@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -370,7 +371,7 @@ func (app *App) renderReport(job Job) ([]byte, error) {
 	// Add variables to the URL if present
 	if len(job.Variables) > 0 {
 		for key, value := range job.Variables {
-			renderURL += fmt.Sprintf("&var-%s=%s", key, value)
+			renderURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
 		}
 	}
 	

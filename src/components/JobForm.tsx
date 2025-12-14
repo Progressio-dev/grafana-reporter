@@ -228,7 +228,7 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel, pluginI
             value={variablesText}
             onChange={(e) => setVariablesText(e.currentTarget.value)}
             rows={3}
-            placeholder="region=us-east&#10;environment=production"
+            placeholder={'region=us-east\nenvironment=production'}
           />
         </Field>
 
