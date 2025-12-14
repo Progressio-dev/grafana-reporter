@@ -53,7 +53,7 @@ export const DashboardSelector: React.FC<DashboardSelectorProps> = ({ pluginId, 
   const folderGroups: { [key: string]: Dashboard[] } = {};
 
   dashboards.forEach((dashboard) => {
-    const folderTitle = dashboard.folderTitle || 'General';
+    const folderTitle = dashboard.folderTitle?.trim() || 'General';
     if (!folderGroups[folderTitle]) {
       folderGroups[folderTitle] = [];
     }
