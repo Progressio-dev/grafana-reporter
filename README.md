@@ -122,9 +122,6 @@ The plugin provides the following backend API endpoints:
 - `DELETE /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}` - Delete job
 - `POST /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}/execute` - Execute job immediately
 - `GET /api/plugins/progressio-grafanareporter-app/resources/dashboards` - List all dashboards from Grafana
-- `PUT /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}` - Update job
-- `DELETE /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}` - Delete job
-- `POST /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}/execute` - Execute job immediately
 
 ## Architecture
 
