@@ -45,6 +45,7 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
     cron: '0 9 * * *',
     dashboardUid: '',
     slug: '',
+    panelId: undefined,    
     from: 'now-24h',
     to: 'now',
     width: 1920,
@@ -154,7 +155,7 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel }) => {
         <Field label="Panel ID (optional)" description="Leave empty to render the full dashboard">
           <Input
             type="number"
-            value={formData.panelId ?? ''}
+	    value={formData.panelId !== undefined ?  formData.panelId : ''}
             onChange={(e) =>
               setFormData({
                 ...formData,
