@@ -859,15 +859,59 @@ func (app *App) handleDashboards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read and forward the response
+	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read response: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	// Parse the response to ensure slug is properly extracted
+	var dashboards []map[string]interface{}
+	if err := json.Unmarshal(body, &dashboards); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse dashboards: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Process each dashboard to ensure it has a slug
+	for i := range dashboards {
+		// If slug is not present, extract it from URI
+		if _, hasSlug := dashboards[i]["slug"]; !hasSlug {
+			if uri, ok := dashboards[i]["uri"].(string); ok {
+				// URI format is typically "db/dashboard-slug"
+				parts := strings.Split(uri, "/")
+				if len(parts) >= 2 {
+					dashboards[i]["slug"] = parts[len(parts)-1]
+				} else if len(parts) == 1 {
+					dashboards[i]["slug"] = parts[0]
+				}
+			}
+		}
+		
+		// Also ensure slug matches the URL if available
+		if slug, hasSlug := dashboards[i]["slug"].(string); !hasSlug || slug == "" {
+			if url, ok := dashboards[i]["url"].(string); ok {
+				// URL format can be "/d/uid/slug" or "/d/uid"
+				parts := strings.Split(strings.Trim(url, "/"), "/")
+				if len(parts) >= 3 {
+					dashboards[i]["slug"] = parts[2]
+				} else if uid, hasUid := dashboards[i]["uid"].(string); hasUid {
+					// Fallback to using UID as slug
+					dashboards[i]["slug"] = uid
+				}
+			}
+		}
+	}
+
+	// Marshal back to JSON
+	processedBody, err := json.Marshal(dashboards)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to marshal dashboards: %v", err), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(body)
+	w.Write(processedBody)
 }
 
 // handleVersion returns version information about the plugin
