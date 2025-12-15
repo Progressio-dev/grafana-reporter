@@ -106,8 +106,8 @@ func (s *EmailSender) Send(to []string, subject, body string, attachment []byte,
 	return nil
 }
 
-// SendHTML sends an email with HTML body and embedded image
-func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []byte, imageFormat string) error {
+// SendHTML sends an email with HTML body, embedded image, and link to live dashboard
+func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []byte, imageFormat string, dashboardURL string) error {
 	// Create message
 	var buf bytes.Buffer
 	
@@ -155,26 +155,147 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
 		return fmt.Errorf("failed to create HTML body part: %w", err)
 	}
 	
-	// Create HTML content with embedded image
+	// Create HTML content with embedded image, link to live dashboard, and iframe for webmail clients
 	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .content { margin-bottom: 20px; }
-        .report-image { max-width: 100%%; height: auto; border: 1px solid #ddd; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .email-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .content { 
+            padding: 30px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .content p {
+            margin: 0 0 15px 0;
+        }
+        .report-section {
+            margin: 30px 0;
+            text-align: center;
+        }
+        .report-link {
+            display: inline-block;
+            text-decoration: none;
+            position: relative;
+        }
+        .report-image { 
+            max-width: 100%%; 
+            height: auto; 
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .report-link:hover .report-image {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+        .view-live-btn {
+            display: inline-block;
+            margin: 20px auto;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .view-live-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
+        .iframe-container {
+            margin: 30px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #f9f9f9;
+        }
+        .iframe-container iframe {
+            width: 100%%;
+            min-height: 600px;
+            border: none;
+            display: block;
+        }
+        .note {
+            padding: 15px;
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #856404;
+        }
+        .footer {
+            padding: 20px 30px;
+            background-color: #f8f9fa;
+            text-align: center;
+            font-size: 12px;
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+        }
     </style>
 </head>
 <body>
-    <div class="content">
-        <p>%s</p>
-    </div>
-    <div class="report">
-        <img src="cid:report-image" alt="Grafana Report" class="report-image" />
+    <div class="email-container">
+        <div class="header">
+            <h1>📊 Grafana Report</h1>
+        </div>
+        <div class="content">
+            <p>%s</p>
+        </div>
+        <div class="report-section">
+            <a href="%s" class="report-link" target="_blank" rel="noopener noreferrer">
+                <img src="cid:report-image" alt="Grafana Report - Click to view live dashboard" class="report-image" />
+            </a>
+            <div style="margin-top: 20px;">
+                <a href="%s" class="view-live-btn" target="_blank" rel="noopener noreferrer">
+                    🔴 View Live Dashboard
+                </a>
+            </div>
+        </div>
+        <div class="note">
+            <strong>💡 Tip:</strong> Click the image or button above to view the interactive, live dashboard in Grafana with real-time data.
+        </div>
+        <div class="iframe-container">
+            <iframe src="%s&kiosk" title="Live Grafana Dashboard" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+        </div>
+        <div class="footer">
+            <p>This report was automatically generated by Grafana Reporter Plugin</p>
+            <p>The embedded dashboard above is live and interactive (if your email client supports iframes)</p>
+        </div>
     </div>
 </body>
-</html>`, strings.ReplaceAll(body, "\n", "<br>"))
+</html>`, strings.ReplaceAll(body, "\n", "<br>"), dashboardURL, dashboardURL, dashboardURL)
 	
 	htmlPart.Write([]byte(htmlContent))
 	
