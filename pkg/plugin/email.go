@@ -12,7 +12,7 @@ import (
 
 const (
 	// htmlEmailFallbackText is the message shown to email clients that don't support HTML
-	htmlEmailFallbackText = "\n\nThis email contains an embedded image. Please view it in an HTML-capable email client."
+	htmlEmailFallbackText = "\n\nThis email contains an embedded dashboard snapshot. Please view it in an HTML-capable email client."
 )
 
 // EmailSender handles sending emails via SMTP
@@ -106,7 +106,7 @@ func (s *EmailSender) Send(to []string, subject, body string, attachment []byte,
 	return nil
 }
 
-// SendHTML sends an email with HTML body, embedded image, and link to live dashboard
+// SendHTML sends an email with HTML body and embedded image (fully offline, no external links)
 func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []byte, imageFormat string, dashboardURL string) error {
 	// Create message
 	var buf bytes.Buffer
@@ -155,8 +155,9 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
 		return fmt.Errorf("failed to create HTML body part: %w", err)
 	}
 	
-	// Create HTML content with embedded image and link to live dashboard
-	// Note: iframes are often blocked by email clients, so we focus on the embedded image and link
+	// Create HTML content with embedded image (fully offline, no external links)
+	// Note: Email clients have security restrictions - no JavaScript, limited CSS, no iframes
+	// This provides a rich, self-contained visual presentation without any external dependencies
 	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
@@ -199,11 +200,7 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
         .report-section {
             margin: 30px 0;
             text-align: center;
-        }
-        .report-link {
-            display: inline-block;
-            text-decoration: none;
-            position: relative;
+            padding: 20px;
         }
         .report-image { 
             max-width: 100%%; 
@@ -211,37 +208,22 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
             border: 1px solid #e0e0e0;
             border-radius: 4px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: block;
+            margin: 0 auto;
         }
-        .report-link:hover .report-image {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
-        }
-        .view-live-btn {
-            display: inline-block;
-            margin: 20px auto;
-            padding: 14px 32px;
-            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 16px;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .view-live-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-        }
-        .note {
+        .info-box {
             padding: 15px;
-            background-color: #e3f2fd;
-            border-left: 4px solid #2196f3;
+            background-color: #e8f5e9;
+            border-left: 4px solid #4caf50;
             margin: 20px 30px;
             border-radius: 4px;
             font-size: 14px;
-            color: #1565c0;
+            color: #2e7d32;
+        }
+        .info-box strong {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 15px;
         }
         .footer {
             padding: 20px 30px;
@@ -250,6 +232,9 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
             font-size: 12px;
             color: #6c757d;
             border-top: 1px solid #e9ecef;
+        }
+        .footer p {
+            margin: 5px 0;
         }
     </style>
 </head>
@@ -262,25 +247,19 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
             <p>%s</p>
         </div>
         <div class="report-section">
-            <a href="%s" class="report-link" target="_blank" rel="noopener noreferrer">
-                <img src="cid:report-image" alt="Grafana Report - Click to view live dashboard" class="report-image" />
-            </a>
-            <div style="margin-top: 20px;">
-                <a href="%s" class="view-live-btn" target="_blank" rel="noopener noreferrer">
-                    🔴 View Live Dashboard
-                </a>
-            </div>
+            <img src="cid:report-image" alt="Grafana Report Dashboard" class="report-image" />
         </div>
-        <div class="note">
-            <strong>💡 Tip:</strong> Click the image or button above to view the interactive, live dashboard in Grafana with real-time data and all variables applied.
+        <div class="info-box">
+            <strong>📋 Report Information</strong>
+            This is a static snapshot of your Grafana dashboard, captured at the moment of generation. All content is embedded within this email for offline viewing.
         </div>
         <div class="footer">
-            <p>This report was automatically generated by Grafana Reporter Plugin</p>
-            <p>Click the dashboard image or button above to access the live, interactive version in Grafana</p>
+            <p><strong>Grafana Reporter Plugin</strong></p>
+            <p>This report was automatically generated and contains all data embedded within the email.</p>
         </div>
     </div>
 </body>
-</html>`, strings.ReplaceAll(body, "\n", "<br>"), dashboardURL, dashboardURL)
+</html>`, strings.ReplaceAll(body, "\n", "<br>"))
 	
 	htmlPart.Write([]byte(htmlContent))
 	
