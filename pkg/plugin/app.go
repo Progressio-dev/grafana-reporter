@@ -381,12 +381,14 @@ func (app *App) renderReport(job Job) ([]byte, error) {
 	
 	// Add variables to the URL if present
 	if len(job.Variables) > 0 {
+		log.DefaultLogger.Info("Adding variables to render URL", "count", len(job.Variables))
 		for key, value := range job.Variables {
 			renderURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+			log.DefaultLogger.Debug("Added variable", "key", key, "value", value)
 		}
 	}
 	
-	log.DefaultLogger.Debug("Rendering report", "url", renderURL, "format", job.Format)
+	log.DefaultLogger.Info("Rendering report", "url", renderURL, "format", job.Format)
 	
 	// Create HTTP request
 	req, err := http.NewRequest("GET", renderURL, nil)
@@ -434,6 +436,7 @@ func (app *App) sendEmail(job Job, attachment []byte) error {
 	smtpUser := app.config.SMTPUser
 	smtpPass := app.config.SMTPPassword
 	smtpFrom := app.config.SMTPFrom
+	grafanaURL := app.config.GrafanaURL
 	app.configMu.RUnlock()
 	
 	if smtpHost == "" {
@@ -453,8 +456,11 @@ func (app *App) sendEmail(job Job, attachment []byte) error {
 	
 	// Check if HTML format is requested
 	if job.Format == "html" {
-		// For HTML format, render as PNG and embed the image in the email body
-		return sender.SendHTML(job.Recipients, job.Subject, job.Body, attachment, "png")
+		// Build dashboard URL for linking
+		dashboardURL := app.buildDashboardURL(grafanaURL, job)
+		
+		// For HTML format, render as PNG and embed the image in the email body with a link to the live dashboard
+		return sender.SendHTML(job.Recipients, job.Subject, job.Body, attachment, "png", dashboardURL)
 	}
 	
 	// Determine attachment filename for non-HTML formats
@@ -462,6 +468,29 @@ func (app *App) sendEmail(job Job, attachment []byte) error {
 	
 	// Send email with attachment
 	return sender.Send(job.Recipients, job.Subject, job.Body, attachment, filename)
+}
+
+// buildDashboardURL builds a URL to the dashboard with all parameters
+func (app *App) buildDashboardURL(grafanaURL string, job Job) string {
+	var dashboardURL string
+	if job.PanelID != nil {
+		// Link to single panel
+		dashboardURL = fmt.Sprintf("%s/d/%s/%s?viewPanel=%d&from=%s&to=%s",
+			grafanaURL, job.DashboardUID, job.Slug, *job.PanelID, url.QueryEscape(job.From), url.QueryEscape(job.To))
+	} else {
+		// Link to full dashboard
+		dashboardURL = fmt.Sprintf("%s/d/%s/%s?from=%s&to=%s",
+			grafanaURL, job.DashboardUID, job.Slug, url.QueryEscape(job.From), url.QueryEscape(job.To))
+	}
+	
+	// Add variables to the URL if present
+	if len(job.Variables) > 0 {
+		for key, value := range job.Variables {
+			dashboardURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+		}
+	}
+	
+	return dashboardURL
 }
 
 // HTTP handlers

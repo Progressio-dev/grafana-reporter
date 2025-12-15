@@ -117,7 +117,14 @@ The plugin supports three email formats:
 
 - **PNG**: Renders the dashboard as a PNG image and attaches it to the email
 - **PDF**: Renders the dashboard as a PDF document and attaches it to the email
-- **HTML**: Renders the dashboard as a PNG image and embeds it directly in the email body as an HTML email (no attachment needed - recipients see the report inline)
+- **HTML**: Creates a rich, interactive HTML email with:
+  - The dashboard rendered as a PNG image embedded inline (no attachment)
+  - A prominent clickable link to view the live dashboard in Grafana
+  - An embedded iframe with the live dashboard (for webmail clients that support iframes)
+  - Modern, responsive design that works across email clients
+  - The image and button link directly to the live Grafana dashboard with all variables preserved
+
+When using HTML format, recipients can click the image or "View Live Dashboard" button to open the interactive dashboard in their browser, providing access to the full Grafana interface with real-time data.
 
 ## API Endpoints
 
