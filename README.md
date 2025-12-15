@@ -130,6 +130,27 @@ The plugin provides the following backend API endpoints:
 - `DELETE /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}` - Delete job
 - `POST /api/plugins/progressio-grafanareporter-app/resources/jobs/{id}/execute` - Execute job immediately
 - `GET /api/plugins/progressio-grafanareporter-app/resources/dashboards` - List all dashboards from Grafana
+- `GET /api/plugins/progressio-grafanareporter-app/resources/version` - Get plugin version and build information
+- `POST /api/plugins/progressio-grafanareporter-app/resources/reload` - Force reload plugin configuration and jobs
+
+## Plugin Management
+
+### Version Information
+
+The plugin displays version information at the top of the main page, including:
+- Version number (from git tags or commit hash)
+- Build timestamp
+- Plugin start time
+- Current uptime
+
+This helps ensure you're running the latest version of the plugin.
+
+### Force Reload
+
+Use the "Force Reload Plugin" button to reload the plugin configuration and jobs without restarting Grafana. This is useful when:
+- You've manually edited the configuration or jobs files
+- You want to ensure the plugin is using the latest settings
+- You need to refresh the plugin state without downtime
 
 ## Architecture
 
@@ -139,6 +160,7 @@ The plugin provides the following backend API endpoints:
 - **Job Storage**: Jobs are stored in `data/jobs.json`
 - **Rendering**: Uses Grafana's `/render/d` and `/render/d-solo` endpoints
 - **Email**: SMTP-based email delivery with attachments
+- **Dashboard API**: Automatically extracts slugs from Grafana dashboard URIs for proper rendering
 
 ### Frontend (React)
 
