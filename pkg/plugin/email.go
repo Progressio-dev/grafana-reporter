@@ -10,6 +10,11 @@ import (
 	"strings"
 )
 
+const (
+	// htmlEmailFallbackText is the message shown to email clients that don't support HTML
+	htmlEmailFallbackText = "\n\nThis email contains an embedded image. Please view it in an HTML-capable email client."
+)
+
 // EmailSender handles sending emails via SMTP
 type EmailSender struct {
 	host string
@@ -124,7 +129,7 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
 	if err != nil {
 		return fmt.Errorf("failed to create text part: %w", err)
 	}
-	textPart.Write([]byte(body + "\n\nThis email contains an embedded image. Please view it in an HTML-capable email client."))
+	textPart.Write([]byte(body + htmlEmailFallbackText))
 	
 	// Create multipart/related part for HTML with embedded images
 	relatedHeader := textproto.MIMEHeader{}
@@ -138,8 +143,8 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
 	}
 	
 	// Write the related part header manually
-	relatedBuf := &bytes.Buffer{}
-	innerWriter := multipart.NewWriter(relatedBuf)
+	relatedPartBuffer := &bytes.Buffer{}
+	innerWriter := multipart.NewWriter(relatedPartBuffer)
 	innerWriter.SetBoundary(relatedBoundary)
 	
 	// Write HTML body part
@@ -204,7 +209,7 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
 	}
 	
 	innerWriter.Close()
-	relatedPart.Write(relatedBuf.Bytes())
+	relatedPart.Write(relatedPartBuffer.Bytes())
 	
 	outerWriter.Close()
 	
