@@ -112,14 +112,38 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
 	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	buf.WriteString("MIME-Version: 1.0\r\n")
 	
-	// Create multipart/related for HTML with embedded images
-	writer := multipart.NewWriter(&buf)
-	boundary := writer.Boundary()
-	buf.WriteString(fmt.Sprintf("Content-Type: multipart/related; boundary=%s\r\n", boundary))
+	// Create outer multipart/alternative writer for text and HTML alternatives
+	outerWriter := multipart.NewWriter(&buf)
+	buf.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%s\r\n", outerWriter.Boundary()))
 	buf.WriteString("\r\n")
 	
+	// Add plain text version for email clients that don't support HTML
+	textPart, err := outerWriter.CreatePart(textproto.MIMEHeader{
+		"Content-Type": []string{"text/plain; charset=utf-8"},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create text part: %w", err)
+	}
+	textPart.Write([]byte(body + "\n\nThis email contains an embedded image. Please view it in an HTML-capable email client."))
+	
+	// Create multipart/related part for HTML with embedded images
+	relatedHeader := textproto.MIMEHeader{}
+	relatedWriter := multipart.NewWriter(&buf)
+	relatedBoundary := relatedWriter.Boundary()
+	relatedHeader.Set("Content-Type", fmt.Sprintf("multipart/related; boundary=%s", relatedBoundary))
+	
+	relatedPart, err := outerWriter.CreatePart(relatedHeader)
+	if err != nil {
+		return fmt.Errorf("failed to create related part: %w", err)
+	}
+	
+	// Write the related part header manually
+	relatedBuf := &bytes.Buffer{}
+	innerWriter := multipart.NewWriter(relatedBuf)
+	innerWriter.SetBoundary(relatedBoundary)
+	
 	// Write HTML body part
-	htmlPart, err := writer.CreatePart(textproto.MIMEHeader{
+	htmlPart, err := innerWriter.CreatePart(textproto.MIMEHeader{
 		"Content-Type": []string{"text/html; charset=utf-8"},
 	})
 	if err != nil {
@@ -157,7 +181,7 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
 			contentType = "application/pdf"
 		}
 		
-		imagePart, err := writer.CreatePart(textproto.MIMEHeader{
+		imagePart, err := innerWriter.CreatePart(textproto.MIMEHeader{
 			"Content-Type":              []string{contentType},
 			"Content-Transfer-Encoding": []string{"base64"},
 			"Content-ID":                []string{"<report-image>"},
@@ -179,7 +203,10 @@ func (s *EmailSender) SendHTML(to []string, subject, body string, imageData []by
 		}
 	}
 	
-	writer.Close()
+	innerWriter.Close()
+	relatedPart.Write(relatedBuf.Bytes())
+	
+	outerWriter.Close()
 	
 	// Connect to SMTP server
 	addr := fmt.Sprintf("%s:%s", s.host, s.port)

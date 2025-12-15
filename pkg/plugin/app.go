@@ -821,7 +821,8 @@ func (app *App) handleDashboards(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Make request to Grafana search API
-	searchURL := fmt.Sprintf("%s/api/search?type=dash-db", grafanaURL)
+	// Set limit to 5000 to ensure we get all dashboards
+	searchURL := fmt.Sprintf("%s/api/search?type=dash-db&limit=5000", grafanaURL)
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create request: %v", err), http.StatusInternalServerError)
