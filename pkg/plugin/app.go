@@ -48,6 +48,53 @@ type Job struct {
 	Variables    map[string][]string `json:"variables,omitempty"` // Dashboard variables (supports multiple values per key)
 }
 
+// UnmarshalJSON custom unmarshaler to handle backward compatibility for Variables field
+// Supports both old format (map[string]string) and new format (map[string][]string)
+func (j *Job) UnmarshalJSON(data []byte) error {
+	// Define a temporary type to avoid recursion
+	type TempJob Job
+	
+	// First, try to unmarshal into a temporary structure with variables as interface{}
+	var temp struct {
+		TempJob
+		Variables interface{} `json:"variables,omitempty"`
+	}
+	
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+	
+	// Copy all fields except Variables
+	*j = Job(temp.TempJob)
+	
+	// Handle Variables field with backward compatibility
+	if temp.Variables != nil {
+		j.Variables = make(map[string][]string)
+		
+		// Check if it's a map
+		if varMap, ok := temp.Variables.(map[string]interface{}); ok {
+			for key, value := range varMap {
+				switch v := value.(type) {
+				case string:
+					// Old format: single string value
+					j.Variables[key] = []string{v}
+				case []interface{}:
+					// New format: array of strings
+					stringArray := make([]string, 0, len(v))
+					for _, item := range v {
+						if str, ok := item.(string); ok {
+							stringArray = append(stringArray, str)
+						}
+					}
+					j.Variables[key] = stringArray
+				}
+			}
+		}
+	}
+	
+	return nil
+}
+
 // Config represents the plugin configuration
 type Config struct {
 	GrafanaURL    string `json:"grafanaUrl"`
