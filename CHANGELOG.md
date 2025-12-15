@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-12-15
+
+### Added
+- HTML email format option that embeds dashboard images directly in the email body
+- Improved dashboard selector to properly display root/General folder dashboards
+
+### Changed
+- Plugin version incremented from 1.0.2 to 1.1.0 to ensure Grafana recognizes the update
+- Enhanced email sending to support multipart/related HTML emails with embedded images
+
+### Fixed
+- Dashboard selector now correctly handles dashboards without folder assignments (root/General folder)
+- Empty folder titles are now properly normalized to "General"
+
 ## [1.0.0] - 2025-12-12
 
 ### Added
