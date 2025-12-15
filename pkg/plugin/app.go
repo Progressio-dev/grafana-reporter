@@ -45,7 +45,56 @@ type Job struct {
 	Recipients   []string          `json:"recipients"`
 	Subject      string            `json:"subject"`
 	Body         string            `json:"body"`
-	Variables    map[string]string `json:"variables,omitempty"` // Dashboard variables
+	Variables    map[string][]string `json:"variables,omitempty"` // Dashboard variables (supports multiple values per key)
+}
+
+// UnmarshalJSON custom unmarshaler to handle backward compatibility for Variables field
+// Supports both old format (map[string]string) and new format (map[string][]string)
+func (j *Job) UnmarshalJSON(data []byte) error {
+	// Define a temporary type to avoid recursion
+	type TempJob Job
+	
+	// First, try to unmarshal into a temporary structure with variables as interface{}
+	var temp struct {
+		TempJob
+		Variables interface{} `json:"variables,omitempty"`
+	}
+	
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+	
+	// Copy all fields except Variables
+	*j = Job(temp.TempJob)
+	
+	// Handle Variables field with backward compatibility
+	if temp.Variables != nil {
+		j.Variables = make(map[string][]string)
+		
+		// Check if it's a map
+		if varMap, ok := temp.Variables.(map[string]interface{}); ok {
+			for key, value := range varMap {
+				switch v := value.(type) {
+				case string:
+					// Old format: single string value
+					j.Variables[key] = []string{v}
+				case []interface{}:
+					// New format: array of strings
+					stringArray := make([]string, 0, len(v))
+					for _, item := range v {
+						if str, ok := item.(string); ok {
+							stringArray = append(stringArray, str)
+						} else {
+							log.DefaultLogger.Warn("Ignoring non-string value in variable array", "key", key, "value", item)
+						}
+					}
+					j.Variables[key] = stringArray
+				}
+			}
+		}
+	}
+	
+	return nil
 }
 
 // Config represents the plugin configuration
@@ -381,10 +430,17 @@ func (app *App) renderReport(job Job) ([]byte, error) {
 	
 	// Add variables to the URL if present
 	if len(job.Variables) > 0 {
-		log.DefaultLogger.Info("Adding variables to render URL", "count", len(job.Variables))
-		for key, value := range job.Variables {
-			renderURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
-			log.DefaultLogger.Debug("Added variable", "key", key, "value", value)
+		totalVars := 0
+		for _, values := range job.Variables {
+			totalVars += len(values)
+		}
+		log.DefaultLogger.Info("Adding variables to render URL", "count", totalVars)
+		for key, values := range job.Variables {
+			// Support multiple values for the same variable key
+			for _, value := range values {
+				renderURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+				log.DefaultLogger.Debug("Added variable", "key", key, "value", value)
+			}
 		}
 	}
 	
@@ -485,8 +541,11 @@ func (app *App) buildDashboardURL(grafanaURL string, job Job) string {
 	
 	// Add variables to the URL if present
 	if len(job.Variables) > 0 {
-		for key, value := range job.Variables {
-			dashboardURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+		for key, values := range job.Variables {
+			// Support multiple values for the same variable key
+			for _, value := range values {
+				dashboardURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+			}
 		}
 	}
 	

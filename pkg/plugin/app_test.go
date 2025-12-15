@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -88,4 +89,122 @@ func TestEmailSenderCreation(t *testing.T) {
 
 func intPtr(i int) *int {
 	return &i
+}
+
+func TestJobUnmarshalBackwardCompatibility(t *testing.T) {
+	tests := []struct {
+		name         string
+		jsonData     string
+		expectedVars map[string][]string
+	}{
+		{
+			name: "old format with single string values",
+			jsonData: `{
+				"id": "test-1",
+				"cron": "0 9 * * *",
+				"dashboardUid": "abc123",
+				"slug": "test-dashboard",
+				"from": "now-24h",
+				"to": "now",
+				"width": 1920,
+				"height": 1080,
+				"scale": 1,
+				"format": "png",
+				"recipients": ["test@example.com"],
+				"subject": "Test",
+				"body": "Test body",
+				"variables": {
+					"region": "us-east",
+					"environment": "production"
+				}
+			}`,
+			expectedVars: map[string][]string{
+				"region":      {"us-east"},
+				"environment": {"production"},
+			},
+		},
+		{
+			name: "new format with array values",
+			jsonData: `{
+				"id": "test-2",
+				"cron": "0 9 * * *",
+				"dashboardUid": "abc123",
+				"slug": "test-dashboard",
+				"from": "now-24h",
+				"to": "now",
+				"width": 1920,
+				"height": 1080,
+				"scale": 1,
+				"format": "png",
+				"recipients": ["test@example.com"],
+				"subject": "Test",
+				"body": "Test body",
+				"variables": {
+					"emitters": ["5f45401492b2875fc4283246", "5f45401195b135433f790290"]
+				}
+			}`,
+			expectedVars: map[string][]string{
+				"emitters": {"5f45401492b2875fc4283246", "5f45401195b135433f790290"},
+			},
+		},
+		{
+			name: "mixed format",
+			jsonData: `{
+				"id": "test-3",
+				"cron": "0 9 * * *",
+				"dashboardUid": "abc123",
+				"slug": "test-dashboard",
+				"from": "now-24h",
+				"to": "now",
+				"width": 1920,
+				"height": 1080,
+				"scale": 1,
+				"format": "png",
+				"recipients": ["test@example.com"],
+				"subject": "Test",
+				"body": "Test body",
+				"variables": {
+					"region": "us-east",
+					"emitters": ["5f45401492b2875fc4283246", "5f45401195b135433f790290"]
+				}
+			}`,
+			expectedVars: map[string][]string{
+				"region":   {"us-east"},
+				"emitters": {"5f45401492b2875fc4283246", "5f45401195b135433f790290"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var job Job
+			if err := json.Unmarshal([]byte(tt.jsonData), &job); err != nil {
+				t.Fatalf("Failed to unmarshal job: %v", err)
+			}
+
+			// Check that variables match expected
+			if len(job.Variables) != len(tt.expectedVars) {
+				t.Errorf("Expected %d variables, got %d", len(tt.expectedVars), len(job.Variables))
+			}
+
+			for key, expectedValues := range tt.expectedVars {
+				actualValues, ok := job.Variables[key]
+				if !ok {
+					t.Errorf("Expected variable %s not found", key)
+					continue
+				}
+
+				if len(actualValues) != len(expectedValues) {
+					t.Errorf("Variable %s: expected %d values, got %d", key, len(expectedValues), len(actualValues))
+					continue
+				}
+
+				for i, expectedValue := range expectedValues {
+					if actualValues[i] != expectedValue {
+						t.Errorf("Variable %s[%d]: expected %s, got %s", key, i, expectedValue, actualValues[i])
+					}
+				}
+			}
+		})
+	}
 }
