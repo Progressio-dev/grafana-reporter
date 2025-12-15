@@ -32,7 +32,7 @@ type Job struct {
 	Width        int               `json:"width"`
 	Height       int               `json:"height"`
 	Scale        int               `json:"scale"`
-	Format       string            `json:"format"` // png or pdf
+	Format       string            `json:"format"` // png, pdf, or html
 	Recipients   []string          `json:"recipients"`
 	Subject      string            `json:"subject"`
 	Body         string            `json:"body"`
@@ -442,8 +442,7 @@ func (app *App) sendEmail(job Job, attachment []byte) error {
 	
 	// Check if HTML format is requested
 	if job.Format == "html" {
-		// For HTML format, embed the image in the email body
-		// The image should be PNG format for HTML embedding
+		// For HTML format, render as PNG and embed the image in the email body
 		return sender.SendHTML(job.Recipients, job.Subject, job.Body, attachment, "png")
 	}
 	
