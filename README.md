@@ -7,7 +7,7 @@ Schedule PDF/PNG report generation and email sending using Grafana OSS and grafa
 - 📅 **Cron-based Scheduler**: Schedule reports using cron expressions
 - 📊 **Dashboard & Panel Rendering**: Render full dashboards or individual panels
 - 📧 **Email Delivery**: Automatically send rendered reports via email
-- 🖼️ **Multiple Formats**: Support for PNG and PDF output
+- 🖼️ **Multiple Formats**: Support for PNG, PDF, and HTML output
 - 🔒 **Secure**: Uses Grafana's authorization system
 - 🎯 **Dashboard Selector**: Select dashboards from dropdown with folder hierarchy (no need to manually enter UID/slug)
 - 🔧 **Variable Support**: Set dashboard variables for each report (key=value format)
@@ -80,7 +80,7 @@ npm run dev
    - Time range (from/to)
    - Optional: Variables (key=value format, one per line)
    - Rendering dimensions (width, height, scale)
-   - Output format (PNG or PDF)
+   - Output format (PNG, PDF, or HTML)
    - Email recipients
    - Email subject and body
 
@@ -110,6 +110,14 @@ npm run dev
   }
 }
 ```
+
+### Email Formats
+
+The plugin supports three email formats:
+
+- **PNG**: Renders the dashboard as a PNG image and attaches it to the email
+- **PDF**: Renders the dashboard as a PDF document and attaches it to the email
+- **HTML**: Renders the dashboard as a PNG image and embeds it directly in the email body as an HTML email (no attachment needed - recipients see the report inline)
 
 ## API Endpoints
 

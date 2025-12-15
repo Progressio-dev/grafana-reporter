@@ -53,11 +53,12 @@ export const DashboardSelector: React.FC<DashboardSelectorProps> = ({ pluginId, 
   const folderGroups: { [key: string]: Dashboard[] } = {};
 
   dashboards.forEach((dashboard) => {
-    const folderTitle = dashboard.folderTitle?.trim() || 'General';
-    if (!folderGroups[folderTitle]) {
-      folderGroups[folderTitle] = [];
+    const folderTitle = (dashboard.folderTitle?.trim() || '');
+    const effectiveFolderTitle = folderTitle === '' ? 'General' : folderTitle;
+    if (!folderGroups[effectiveFolderTitle]) {
+      folderGroups[effectiveFolderTitle] = [];
     }
-    folderGroups[folderTitle].push(dashboard);
+    folderGroups[effectiveFolderTitle].push(dashboard);
   });
 
   // Sort folders alphabetically, but keep "General" first
