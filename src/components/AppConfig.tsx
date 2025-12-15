@@ -24,6 +24,13 @@ interface Job {
   variables?: { [key: string]: string };
 }
 
+interface VersionInfo {
+  version: string;
+  buildTime: string;
+  startTime: string;
+  uptime: string;
+}
+
 export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,12 +38,24 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
   const [showForm, setShowForm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+  const [reloading, setReloading] = useState(false);
 
   const pluginId = meta.id;
 
   useEffect(() => {
     loadJobs();
+    loadVersion();
   }, []);
+
+  const loadVersion = async () => {
+    try {
+      const response = await getBackendSrv().get(`/api/plugins/${pluginId}/resources/version`);
+      setVersionInfo(response);
+    } catch (err) {
+      console.error('Failed to load version info:', err);
+    }
+  };
 
   const loadJobs = async () => {
     try {
@@ -121,6 +140,24 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
     setShowSettings(false);
   };
 
+  const handleReload = async () => {
+    setReloading(true);
+    try {
+      await getBackendSrv().post(`/api/plugins/${pluginId}/resources/reload`);
+      // Reload jobs and version after successful reload
+      await loadJobs();
+      await loadVersion();
+      // TODO: Replace with Grafana UI notification system
+      window.alert('Plugin reloaded successfully');
+    } catch (err) {
+      console.error('Failed to reload plugin:', err);
+      // TODO: Replace with Grafana UI notification system
+      window.alert('Failed to reload plugin');
+    } finally {
+      setReloading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ padding: '20px' }}>
@@ -152,6 +189,11 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
         <div>
           <h2>Grafana Reporter</h2>
           <p>Schedule PDF/PNG report generation and email sending</p>
+          {versionInfo && (
+            <div style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+              Version: {versionInfo.version} | Build: {versionInfo.buildTime} | Started: {new Date(versionInfo.startTime).toLocaleString()} | Uptime: {versionInfo.uptime}
+            </div>
+          )}
         </div>
 
         {error && (
@@ -169,6 +211,9 @@ export const AppConfig: React.FC<AppRootProps> = ({ meta, query }) => {
           </Button>
           <Button icon="sync" variant="secondary" onClick={loadJobs}>
             Refresh
+          </Button>
+          <Button icon="download-alt" variant="secondary" onClick={handleReload} disabled={reloading}>
+            {reloading ? 'Reloading...' : 'Force Reload Plugin'}
           </Button>
         </HorizontalGroup>
 

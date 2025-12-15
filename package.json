@@ -1,6 +1,6 @@
 {
   "name": "progressio-grafanareporter-app",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Schedule PDF/PNG report generation and email sending",
   "scripts": {
     "build": "webpack -c ./webpack.config.js --env production",

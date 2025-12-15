@@ -20,6 +20,15 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+var (
+	// BuildVersion is the version of the plugin, set at build time
+	BuildVersion = "dev"
+	// BuildTime is the build timestamp, set at build time
+	BuildTime = "unknown"
+	// StartTime is when the plugin instance was started
+	StartTime = time.Now()
+)
+
 // Job represents a scheduled report job
 type Job struct {
 	ID           string            `json:"id"`
@@ -168,6 +177,8 @@ func NewApp(ctx context.Context, settings backend.AppInstanceSettings) (instance
 	mux.HandleFunc("/config", app.handleConfig)
 	mux.HandleFunc("/test-email", app.handleTestEmail)
 	mux.HandleFunc("/dashboards", app.handleDashboards)
+	mux.HandleFunc("/version", app.handleVersion)
+	mux.HandleFunc("/reload", app.handleReload)
 	app.CallResourceHandler = httpadapter.New(mux)
 	
 	return app, nil
@@ -848,13 +859,122 @@ func (app *App) handleDashboards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read and forward the response
+	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read response: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	// Parse the response to ensure slug is properly extracted
+	var dashboards []map[string]interface{}
+	if err := json.Unmarshal(body, &dashboards); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse dashboards: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Process each dashboard to ensure it has a slug
+	for i := range dashboards {
+		// If slug is not present, extract it from URI
+		if _, hasSlug := dashboards[i]["slug"]; !hasSlug {
+			if uri, ok := dashboards[i]["uri"].(string); ok {
+				// URI format is typically "db/dashboard-slug"
+				parts := strings.Split(uri, "/")
+				if len(parts) >= 2 {
+					dashboards[i]["slug"] = parts[len(parts)-1]
+				} else if len(parts) == 1 {
+					dashboards[i]["slug"] = parts[0]
+				}
+			}
+		}
+		
+		// Also ensure slug matches the URL if available
+		if slug, hasSlug := dashboards[i]["slug"].(string); !hasSlug || slug == "" {
+			if url, ok := dashboards[i]["url"].(string); ok {
+				// URL format can be "/d/uid/slug" or "/d/uid"
+				parts := strings.Split(strings.Trim(url, "/"), "/")
+				if len(parts) >= 3 {
+					dashboards[i]["slug"] = parts[2]
+				} else if uid, hasUid := dashboards[i]["uid"].(string); hasUid {
+					// Fallback to using UID as slug
+					dashboards[i]["slug"] = uid
+				}
+			}
+		}
+	}
+
+	// Marshal back to JSON
+	processedBody, err := json.Marshal(dashboards)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to marshal dashboards: %v", err), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(body)
+	w.Write(processedBody)
+}
+
+// handleVersion returns version information about the plugin
+func (app *App) handleVersion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	version := map[string]string{
+		"version":   BuildVersion,
+		"buildTime": BuildTime,
+		"startTime": StartTime.Format(time.RFC3339),
+		"uptime":    time.Since(StartTime).String(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(version)
+}
+
+// handleReload reloads the plugin configuration and jobs
+func (app *App) handleReload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	log.DefaultLogger.Info("Reloading plugin configuration and jobs")
+
+	// Reload configuration
+	if err := app.loadConfig(); err != nil {
+		log.DefaultLogger.Error("Failed to reload config", "error", err)
+		http.Error(w, fmt.Sprintf("Failed to reload configuration: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Reload jobs
+	if err := app.loadJobs(); err != nil {
+		log.DefaultLogger.Error("Failed to reload jobs", "error", err)
+		http.Error(w, fmt.Sprintf("Failed to reload jobs: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Reschedule all jobs
+	app.mu.Lock()
+	// First, clear all existing schedules
+	for jobID, entryID := range app.cronIDs {
+		app.scheduler.Remove(entryID)
+		delete(app.cronIDs, jobID)
+	}
+	app.mu.Unlock()
+
+	// Then, schedule all loaded jobs
+	for _, job := range app.jobs {
+		if err := app.scheduleJob(job); err != nil {
+			log.DefaultLogger.Error("Failed to schedule job during reload", "id", job.ID, "error", err)
+		}
+	}
+
+	log.DefaultLogger.Info("Plugin reloaded successfully")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Plugin reloaded successfully",
+	})
 }

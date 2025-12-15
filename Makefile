@@ -1,10 +1,13 @@
 .PHONY: all build-backend build-frontend clean test
 
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_TIME := $(shell date -u '+%Y-%m-%d %H:%M:%S UTC')
+
 all: build-backend build-frontend
 
 build-backend:
 	@echo "Building backend..."
-	go build -o dist/gpx_grafana-reporter ./pkg
+	go build -ldflags "-X 'github.com/Progressio-dev/grafana-reporter/pkg/plugin.BuildVersion=$(VERSION)' -X 'github.com/Progressio-dev/grafana-reporter/pkg/plugin.BuildTime=$(BUILD_TIME)'" -o dist/gpx_grafana-reporter ./pkg
 
 build-frontend:
 	@echo "Building frontend..."
