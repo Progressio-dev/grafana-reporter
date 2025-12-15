@@ -45,7 +45,7 @@ type Job struct {
 	Recipients   []string          `json:"recipients"`
 	Subject      string            `json:"subject"`
 	Body         string            `json:"body"`
-	Variables    map[string]string `json:"variables,omitempty"` // Dashboard variables
+	Variables    map[string][]string `json:"variables,omitempty"` // Dashboard variables (supports multiple values per key)
 }
 
 // Config represents the plugin configuration
@@ -381,10 +381,17 @@ func (app *App) renderReport(job Job) ([]byte, error) {
 	
 	// Add variables to the URL if present
 	if len(job.Variables) > 0 {
-		log.DefaultLogger.Info("Adding variables to render URL", "count", len(job.Variables))
-		for key, value := range job.Variables {
-			renderURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
-			log.DefaultLogger.Debug("Added variable", "key", key, "value", value)
+		totalVars := 0
+		for _, values := range job.Variables {
+			totalVars += len(values)
+		}
+		log.DefaultLogger.Info("Adding variables to render URL", "count", totalVars)
+		for key, values := range job.Variables {
+			// Support multiple values for the same variable key
+			for _, value := range values {
+				renderURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+				log.DefaultLogger.Debug("Added variable", "key", key, "value", value)
+			}
 		}
 	}
 	
@@ -485,8 +492,11 @@ func (app *App) buildDashboardURL(grafanaURL string, job Job) string {
 	
 	// Add variables to the URL if present
 	if len(job.Variables) > 0 {
-		for key, value := range job.Variables {
-			dashboardURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+		for key, values := range job.Variables {
+			// Support multiple values for the same variable key
+			for _, value := range values {
+				dashboardURL += fmt.Sprintf("&var-%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+			}
 		}
 	}
 	

@@ -34,8 +34,8 @@ func TestBuildDashboardURL(t *testing.T) {
 				Slug:         "test-dashboard",
 				From:         "now-24h",
 				To:           "now",
-				Variables: map[string]string{
-					"region": "us-east",
+				Variables: map[string][]string{
+					"region": {"us-east"},
 				},
 			},
 			expected: "http://localhost:3000/d/abc123/test-dashboard?from=now-24h&to=now&var-region=us-east",
@@ -47,9 +47,9 @@ func TestBuildDashboardURL(t *testing.T) {
 				Slug:         "metrics",
 				From:         "now-1h",
 				To:           "now",
-				Variables: map[string]string{
-					"environment": "production",
-					"service":     "api",
+				Variables: map[string][]string{
+					"environment": {"production"},
+					"service":     {"api"},
 				},
 			},
 			expected: "http://localhost:3000/d/xyz789/metrics?from=now-1h&to=now",
@@ -62,11 +62,24 @@ func TestBuildDashboardURL(t *testing.T) {
 				PanelID:      intPtr(5),
 				From:         "now-6h",
 				To:           "now",
-				Variables: map[string]string{
-					"host": "server-01",
+				Variables: map[string][]string{
+					"host": {"server-01"},
 				},
 			},
 			expected: "http://localhost:3000/d/panel123/panel-dashboard?viewPanel=5&from=now-6h&to=now&var-host=server-01",
+		},
+		{
+			name: "dashboard with multi-value variable (same key multiple times)",
+			job: Job{
+				DashboardUID: "multi123",
+				Slug:         "multi-dashboard",
+				From:         "now-24h",
+				To:           "now",
+				Variables: map[string][]string{
+					"emitters": {"5f45401492b2875fc4283246", "5f45401195b135433f790290"},
+				},
+			},
+			expected: "http://localhost:3000/d/multi123/multi-dashboard?from=now-24h&to=now",
 		},
 	}
 
@@ -74,22 +87,33 @@ func TestBuildDashboardURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := app.buildDashboardURL(app.config.GrafanaURL, tt.job)
 			
-			// For tests with multiple variables, we can't guarantee order, so check contains
-			if len(tt.job.Variables) > 1 {
+			// For tests with multiple variable keys or multi-value variables, we can't guarantee order, so check contains
+			hasMultipleKeys := len(tt.job.Variables) > 1
+			hasMultiValueVar := false
+			for _, values := range tt.job.Variables {
+				if len(values) > 1 {
+					hasMultiValueVar = true
+					break
+				}
+			}
+			
+			if hasMultipleKeys || hasMultiValueVar {
 				// Check that base URL is correct
 				baseURL := "http://localhost:3000/d/" + tt.job.DashboardUID + "/" + tt.job.Slug
 				if !strings.HasPrefix(result, baseURL) {
 					t.Errorf("Expected URL to start with %s, got %s", baseURL, result)
 				}
 				// Check that all variables are present
-				for key, value := range tt.job.Variables {
-					expectedVar := "&var-" + key + "=" + value
-					if !strings.Contains(result, expectedVar) {
-						t.Errorf("Expected URL to contain %s, got %s", expectedVar, result)
+				for key, values := range tt.job.Variables {
+					for _, value := range values {
+						expectedVar := "&var-" + key + "=" + value
+						if !strings.Contains(result, expectedVar) {
+							t.Errorf("Expected URL to contain %s, got %s", expectedVar, result)
+						}
 					}
 				}
 			} else {
-				// For single or no variables, we can check exact match
+				// For single value variables, we can check exact match
 				if result != tt.expected {
 					t.Errorf("Expected %s, got %s", tt.expected, result)
 				}

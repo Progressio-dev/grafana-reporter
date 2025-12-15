@@ -27,7 +27,7 @@ interface Job {
   recipients: string[];
   subject: string;
   body: string;
-  variables?: { [key: string]: string };
+  variables?: { [key: string]: string | string[] };
 }
 
 interface JobFormProps {
@@ -74,10 +74,16 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel, pluginI
       
       // Convert variables object to text
       if (job.variables) {
-        const varsText = Object.entries(job.variables)
-          .map(([key, value]) => `${key}=${value}`)
-          .join('\n');
-        setVariablesText(varsText);
+        const varsLines: string[] = [];
+        Object.entries(job.variables).forEach(([key, value]) => {
+          // Support both single string and array of strings
+          if (Array.isArray(value)) {
+            value.forEach((v) => varsLines.push(`${key}=${v}`));
+          } else {
+            varsLines.push(`${key}=${value}`);
+          }
+        });
+        setVariablesText(varsLines.join('\n'));
       }
     }
   }, [job]);
@@ -115,8 +121,8 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel, pluginI
       return;
     }
 
-    // Parse variables
-    const variables: { [key: string]: string } = {};
+    // Parse variables - support multiple values for the same key
+    const variables: { [key: string]: string[] } = {};
     if (variablesText.trim()) {
       const lines = variablesText.split('\n');
       for (const line of lines) {
@@ -124,7 +130,14 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel, pluginI
         if (trimmedLine) {
           const [key, ...valueParts] = trimmedLine.split('=');
           if (key && valueParts.length > 0) {
-            variables[key.trim()] = valueParts.join('=').trim();
+            const trimmedKey = key.trim();
+            const value = valueParts.join('=').trim();
+            // If key already exists, add to the array, otherwise create new array
+            if (variables[trimmedKey]) {
+              variables[trimmedKey].push(value);
+            } else {
+              variables[trimmedKey] = [value];
+            }
           } else {
             setError(`Invalid variable format: "${trimmedLine}". Use format: key=value`);
             return;
@@ -223,13 +236,13 @@ export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel, pluginI
 
         <Field 
           label="Variables (optional)" 
-          description="Dashboard variables, one per line in format: key=value"
+          description="Dashboard variables, one per line in format: key=value. Use the same key multiple times for multi-value variables."
         >
           <TextArea
             value={variablesText}
             onChange={(e) => setVariablesText(e.currentTarget.value)}
             rows={3}
-            placeholder={'region=us-east\nenvironment=production'}
+            placeholder={'region=us-east\nenvironment=production\nemitters=5f45401492b2875fc4283246\nemitters=5f45401195b135433f790290'}
           />
         </Field>
 
