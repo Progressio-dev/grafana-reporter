@@ -440,10 +440,17 @@ func (app *App) sendEmail(job Job, attachment []byte) error {
 	// Create email sender
 	sender := NewEmailSender(smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom)
 	
-	// Determine attachment filename
+	// Check if HTML format is requested
+	if job.Format == "html" {
+		// For HTML format, embed the image in the email body
+		// The image should be PNG format for HTML embedding
+		return sender.SendHTML(job.Recipients, job.Subject, job.Body, attachment, "png")
+	}
+	
+	// Determine attachment filename for non-HTML formats
 	filename := fmt.Sprintf("report-%s.%s", time.Now().Format("2006-01-02-150405"), job.Format)
 	
-	// Send email
+	// Send email with attachment
 	return sender.Send(job.Recipients, job.Subject, job.Body, attachment, filename)
 }
 

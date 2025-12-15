@@ -40,6 +40,7 @@ interface JobFormProps {
 const formatOptions: Array<SelectableValue<string>> = [
   { label: 'PNG', value: 'png' },
   { label: 'PDF', value: 'pdf' },
+  { label: 'HTML (embedded in email)', value: 'html' },
 ];
 
 export const JobForm: React.FC<JobFormProps> = ({ job, onSave, onCancel, pluginId }) => {
