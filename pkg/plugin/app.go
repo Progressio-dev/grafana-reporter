@@ -84,6 +84,8 @@ func (j *Job) UnmarshalJSON(data []byte) error {
 					for _, item := range v {
 						if str, ok := item.(string); ok {
 							stringArray = append(stringArray, str)
+						} else {
+							log.DefaultLogger.Warn("Ignoring non-string value in variable array", "key", key, "value", item)
 						}
 					}
 					j.Variables[key] = stringArray
